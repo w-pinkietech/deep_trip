@@ -22,30 +22,24 @@ class DeepTripExtension(AsyncExtension):
 
     async def on_start(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_start")
-        
-        # Read properties
-        # Note: property keys should match property.json
-        gateway_url = await ten_env.get_property_string("OPENCLAW_HOST")
-        if not gateway_url:
-            gateway_url = "ws://localhost:8000"
-            
-        config = OpenClawConfig(
-            gateway_url=gateway_url,
-            # Add other properties as needed
-        )
-        
-        self.client = OpenClawClient(config)
+
+        # Read container name from properties (falls back to default)
+        container_name = ""
         try:
-            await self.client.start()
-            ten_env.log_info("OpenClaw client started")
-        except Exception as e:
-            ten_env.log_error(f"Failed to start OpenClaw client: {e}")
+            container_name = await ten_env.get_property_string("OPENCLAW_HOST")
+        except Exception:
+            pass
+
+        config = OpenClawConfig()
+        if container_name:
+            config.container_name = container_name
+
+        self.client = OpenClawClient(config)
+        ten_env.log_info(f"OpenClaw client ready (container: {config.container_name})")
 
     async def on_stop(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_stop")
-        if self.client:
-            await self.client.stop()
-            self.client = None
+        self.client = None
 
     async def on_deinit(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_deinit")
