@@ -1,4 +1,5 @@
 import json
+import math
 import re
 import time
 import uuid
@@ -267,6 +268,41 @@ class DeepTripExtension(AsyncExtension):
 
         except Exception as e:
             ten_env.log_warn(f"LLM call failed: {e}")
+            # Try demo fallback
+            try:
+                from .demo_fallback import get_fallback_response
+                location_name = self._get_location_name()
+                fallback = get_fallback_response(location_name, text)
+                if fallback:
+                    ten_env.log_info(f"Using demo fallback for {location_name}")
+                    await self._send_text_to_tts(ten_env, fallback)
+            except Exception:
+                pass
+
+    # Known locations for fallback matching (name, lat, lng)
+    _KNOWN_LOCATIONS = [
+        ("sensoji", 35.7148, 139.7967),
+        ("shibuya", 35.6580, 139.7016),
+        ("meiji", 35.6764, 139.6993),
+    ]
+
+    def _get_location_name(self) -> str | None:
+        """Map current GPS coordinates to a known location name."""
+        if not self.location:
+            return None
+        lat, lng = self.location
+        # Find closest known location within ~500m threshold
+        best_name = None
+        best_dist = float("inf")
+        for name, klat, klng in self._KNOWN_LOCATIONS:
+            dist = math.hypot(lat - klat, lng - klng)
+            if dist < best_dist:
+                best_dist = dist
+                best_name = name
+        # ~0.005 degrees ≈ 500m
+        if best_dist < 0.005:
+            return best_name
+        return None
 
     @staticmethod
     def _extract_non_thinking_text(text: str) -> str:
