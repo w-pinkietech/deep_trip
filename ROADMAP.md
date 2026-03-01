@@ -31,8 +31,8 @@
 - [ ] **Integrate with ten-framework submodule**
   - Symlink or path-reference `deep_trip/` from `ten-framework/ai_agents/agents/ten_packages/extension/`
   - Add dependency in tenapp `manifest.json`
-- [ ] **Dependencies**
-  - `requirements.txt`: `aiohttp`, `cryptography` (for OpenClaw WebSocket + Ed25519)
+- [x] **Dependencies**
+  - No special SDK needed — OpenClaw is accessed via `docker exec` CLI commands
   - No SDK needed for ASR/TTS/LLM (handled by existing TEN extensions)
 - [ ] **Environment config**
   - Create `.env.example` with required variables:
@@ -44,24 +44,26 @@
 
 ## Phase 2: OpenClaw Search Client
 
-- [ ] **Implement `OpenClawClient` class**
-  - WebSocket connection to local Docker instance
-  - Ed25519 key-based authentication handshake
-  - `chat.send` protocol for sending search queries
-  - Parse and return structured search results
-- [ ] **Async interface**
-  - `async def search(query: str, location: str) -> list[SearchResult]`
-  - Connection pooling / reconnection logic
-  - Timeout handling
-- [ ] **Unit tests**
-  - Mock WebSocket server for testing
-  - Test auth handshake, query/response cycle, error handling
+- [x] **Implement `OpenClawClient` class**
+  - Executes CLI commands via `docker exec` against the `openclaw-test-openclaw-gateway-1` container
+  - Runs `npx openclaw <subcommand>` (agent, message send, memory search, health, devices, etc.)
+  - No WebSocket or auth handshake needed — the CLI handles authentication internally
+- [x] **Async interface**
+  - `async def search(query, location)` — sends prompt via `openclaw agent` and returns `list[SearchResult]`
+  - `async def agent(message, ...)` — run an agent turn with session/channel options
+  - `async def send_message(target, message, ...)` — send via chat channel
+  - `async def memory_search(query, ...)` — search memory files
+  - `async def health()` / `async def devices_list()` / `async def devices_approve()`
+  - Timeout handling via `asyncio.wait_for` (kills subprocess on timeout)
+- [x] **Unit tests**
+  - Mock `asyncio.create_subprocess_exec` for all CLI operations
+  - Test exec, JSON parsing, timeout/kill, all high-level methods, extract_text/extract_timestamp
 
 ## Phase 3: Deep Trip Extension (Core Logic)
 
 - [ ] **Extension lifecycle**
-  - `on_start`: initialize OpenClawClient, read properties (system_prompt, openclaw config)
-  - `on_stop`: close OpenClaw connection
+  - `on_start`: initialize OpenClawClient with container name from properties
+  - `on_stop`: clear client reference (no connection to close)
   - `on_cmd`: handle `on_user_joined`, `on_user_left`
   - `on_data`: receive `asr_result` from Deepgram ASR
 - [ ] **Location state management**
