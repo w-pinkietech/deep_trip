@@ -15,17 +15,43 @@ APP_CERTIFICATE = os.environ.get("AGORA_APP_CERTIFICATE", "0bc075d3d6fb421d914ae
 TOKEN_EXPIRY = 3600  # 1 hour
 
 
+stored_location = {"lat": None, "lng": None}
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def _send_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._send_cors_headers()
+        self.end_headers()
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path == "/token":
             self.handle_token(parsed.query)
+        elif parsed.path == "/transcript":
+            self.handle_transcript_get()
         elif parsed.path == "/" or parsed.path == "":
             self.path = "/index.html"
             super().do_GET()
         else:
             super().do_GET()
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/location":
+            self.handle_location_post()
+        else:
+            self.send_response(404)
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "not found"}).encode())
 
     def handle_token(self, query_string):
         params = urllib.parse.parse_qs(query_string)
@@ -41,9 +67,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors_headers()
         self.end_headers()
         self.wfile.write(json.dumps({"token": token}).encode())
+
+    def handle_location_post(self):
+        global stored_location
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b"{}"
+        data = json.loads(body)
+        stored_location["lat"] = data.get("lat")
+        stored_location["lng"] = data.get("lng")
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok", "location": stored_location}).encode())
+
+    def handle_transcript_get(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps({"transcript": []}).encode())
 
     def log_message(self, fmt, *args):
         print(f"[test-client] {fmt % args}")
