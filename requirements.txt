@@ -1,8 +1,22 @@
-minimax-py>=0.1.0
+# Core Web Framework
 fastapi>=0.104.0
 uvicorn>=0.24.0
 websockets>=12.0
 python-dotenv>=1.0.0
 httpx>=0.25.0
 requests>=2.31.0
-# tenframework / agora dependencies will be added here
+
+# AI Models & Speech
+openai>=1.0.0
+anthropic>=0.3.0
+
+# Real-time Voice (Agora Tenframework)
+agora-python-server-sdk>=2.4.3
+# ten-framework (if available via pip, otherwise managed by tman)
+
+# Database & Memory (Hidden Gems)
+pymilvus>=2.3.0
+
+# Utilities
+numpy>=1.24.0
+pydantic>=2.0.0

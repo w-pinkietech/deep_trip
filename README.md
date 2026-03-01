@@ -1,39 +1,99 @@
-# 🎤 Deep Trip - Voice-Powered Travel Assistant
+# 🎤 Deep Trip - Voice-Powered Cultural Guide
 
 Vox Tokyo Hackathon 2024 Project
-Track: ⛩️ Omotenashi AI — Immersive AI guide for tourists exploring Japan's hidden gems
+Track: ⛩️ Omotenashi AI — Real-time cultural companion for tourists in Japan
 
-## プロジェクト概要
-音声による旅行アシストAI「Deep Trip」を開発します。観光客が音声で簡単に旅行情報を取得し、日本の隠れた名所を探索できる没入型音声ガイドを提供します。
-MiniMaxとTenframework (Agora) を活用し、リアルタイムで自然な対話を実現します。
+## Project Overview
+Deep Trip is a voice-powered AI assistant built as a **TEN Framework Extension**. It provides real-time cultural and historical information about your current location in Japan.
+The system uses the TEN Framework's graph architecture to connect ASR, LLM, TTS, and our custom "Cultural Guide" logic.
 
-## 主な機能
-- 🎙️ **リアルタイム音声対話**: 低遅延の音声対話でストレスのないガイド体験
-- 🗾 **隠れた名所の案内**: 一般的な観光地ではない、深い日本体験の提案
-- 🤝 **おもてなしAI**: 文化的な背景やマナーも含めた丁寧なガイド
-- 📍 **位置情報連動**: 現在地に基づいたスポット紹介
+## Core Concept
+**"Your Personal Cultural Whisperer"**
+- Uses your GPS location to identify where you are
+- Searches the internet in real-time for cultural/historical information
+- Explains it naturally in Japanese with MiniMax's emotionally expressive voice
+- Provides cultural etiquette tips and local insights on-the-spot
 
-## 技術スタック
-- **言語**: Python
-- **AIモデル**: MiniMax (Emotionally expressive, natural Japanese speech synthesis)
-- **フレームワーク**: Tenframework (Agora - Ultra-low latency real-time voice SDK)
-- **その他**: FastAPI, WebSockets
+## Technology Stack
+- **Framework**: [TEN Framework](https://github.com/TEN-framework/ten-framework) (Python Extension)
+- **AI Models**: 
+  - **LLM**: MiniMax M2.5 (Intelligence & Reasoning)
+  - **TTS**: MiniMax Speech (Japanese)
+  - **ASR**: Local Whisper / Deepgram
+- **Development Tools**: `tman` (TEN Manager), Python 3.10+
 
-## セットアップ
+## Development Guide
 
-### 1. 仮想環境の構築
+This project is developed as a custom **TEN Agent Extension** in Python.
+
+### 1. Prerequisites
+Ensure you have the TEN Framework tools installed:
 ```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate  # Windows
+# Verify tman installation
+tman --version
+# Expected: TEN Framework version: <version>
 ```
 
-### 2. 依存関係のインストール
+### 2. Create Extension Project
+We use the official Python template to scaffold the extension:
+
 ```bash
-pip install -r requirements.txt
+# Create the project structure
+tman create extension deep_trip_extension --template default_extension_python
 ```
 
-### 3. 実行
-```bash
-python main.py
+### 3. Project Structure
+The generated extension follows the standard TEN directory structure:
 ```
+deep_trip_extension/
+├── manifest.json         # Metadata, dependencies, and interface definitions
+├── property.json         # Configuration (API keys, default prompts)
+├── requirements.txt      # Python dependencies (e.g., requests, beautifulsoup4)
+├── src/
+│   ├── main.py           # Entry point
+│   └── extension.py      # Core Logic: Location handling & Web Search
+├── tests/
+│   └── test_basic.py     # Unit tests
+└── .vscode/              # Debug configurations
+```
+
+### 4. Implementation Steps
+
+#### Step A: Install Dependencies
+```bash
+cd deep_trip_extension
+tman install --standalone
+```
+
+#### Step B: Core Logic (`src/extension.py`)
+We implement the `DeepTripExtension` class inheriting from `AsyncExtension`.
+Key responsibilities:
+1.  Receive `on_cmd` (User Voice/Text + Location Data)
+2.  Perform Real-time Web Search (Google Places / Wikipedia API)
+3.  Generate "Omotenashi" response using MiniMax LLM
+4.  Send text back to TTS extension
+
+#### Step C: Configuration (`property.json`)
+Define necessary properties for the extension:
+```json
+{
+  "minimax_api_key": "",
+  "google_maps_api_key": "",
+  "system_prompt": "You are an Omotenashi guide..."
+}
+```
+
+### 5. Build & Test
+Verify the extension logic in isolation before integrating into the full graph.
+```bash
+# Run unit tests
+tman run test
+```
+
+### 6. Integration (Graph)
+To run the full assistant, we configure the TEN Agent graph to include:
+`[ASR] -> [Deep Trip Extension] -> [TTS]`
+
+## Reference
+- [TEN Framework Extension Development Guide](https://github.com/TEN-framework/ten-framework/blob/main/docs/development/how_to_develop_with_ext.md)
+- [MiniMax API Documentation](https://platform.minimaxi.com/)
