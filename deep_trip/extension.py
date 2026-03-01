@@ -82,7 +82,7 @@ class DeepTripExtension(AsyncExtension):
                     if self.client:
                         try:
                             results = await self.client.search(text, location_str)
-                            if results:
+                            if results and results[0].content:
                                 context_info = "\n".join([r.content for r in results])
                                 ten_env.log_info(f"Found {len(results)} search results")
                         except Exception as e:
@@ -92,7 +92,10 @@ class DeepTripExtension(AsyncExtension):
                     prompt_parts = []
                     
                     # System prompt
-                    system_prompt = await ten_env.get_property_string("SYSTEM_PROMPT")
+                    try:
+                        system_prompt = await ten_env.get_property_string("SYSTEM_PROMPT")
+                    except Exception:
+                        system_prompt = ""
                     if system_prompt:
                         prompt_parts.append(f"System Instructions:\n{system_prompt}")
                     
