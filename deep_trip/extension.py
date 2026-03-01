@@ -83,7 +83,25 @@ class DeepTripExtension(AsyncExtension):
                 if is_final and text:
                     ten_env.log_info(f"ASR Result: {text}")
                     location_str = f"{self.location[0]},{self.location[1]}" if self.location else "unknown location"
-                    # TODO: Trigger search or processing with location_str
+                    
+                    context_info = ""
+                    if self.client:
+                        try:
+                            results = await self.client.search(text, location_str)
+                            if results:
+                                context_info = "\n".join([r.content for r in results])
+                                ten_env.log_info(f"Found {len(results)} search results")
+                        except Exception as e:
+                            ten_env.log_warn(f"Search failed: {e}")
+
+                    enriched_text = text
+                    if context_info:
+                        enriched_text = f"Context from OpenClaw:\n{context_info}\n\nUser Query: {text}"
+
+                    output_data = Data.create("text_data")
+                    output_data.set_property_string("text", enriched_text)
+                    output_data.set_property_bool("is_final", True)
+                    await ten_env.send_data(output_data)
             except Exception as e:
                 ten_env.log_warn(f"Failed to parse asr_result: {e}")
 
