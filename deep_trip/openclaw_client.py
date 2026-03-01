@@ -55,6 +55,11 @@ class GatewayRequestError(RuntimeError):
         self.code = code
         self.details = details or {}
 
+@dataclass
+class SearchResult:
+    content: str
+    timestamp: int
+
 class OpenClawClient:
     def __init__(self, config: OpenClawConfig) -> None:
         self.config = config
@@ -69,10 +74,12 @@ class OpenClawClient:
         self._stopped = False
         self._device_identity: DeviceIdentity | None = None
         self._background_tasks: set[asyncio.Task] = set()
+        self._pending_searches: dict[str, asyncio.Future] = {}
         
         # Callbacks
         self.on_chat_message: Callable[[dict], Coroutine[Any, Any, None]] | None = None
         self.on_pairing_required: Callable[[dict], Coroutine[Any, Any, None]] | None = None
+
 
     async def start(self) -> None:
         self._device_identity = self._load_or_create_device_identity()
@@ -119,6 +126,24 @@ class OpenClawClient:
             timeout_ms=self.config.request_timeout_ms,
         )
         return task_id
+
+    async def search(self, query: str, location: str) -> list[SearchResult]:
+        prompt = f"Search for {query} near {location}"
+        task_id = await self.send_chat(prompt)
+        
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._pending_searches[task_id] = fut
+        
+        try:
+            result_payload = await asyncio.wait_for(fut, timeout=self.config.request_timeout_ms/1000)
+            text = self.extract_text(result_payload)
+            ts = self.extract_timestamp(result_payload) or int(time.time() * 1000)
+            return [SearchResult(content=text, timestamp=ts)]
+        except asyncio.TimeoutError:
+             raise TimeoutError("Search timed out")
+        finally:
+             self._pending_searches.pop(task_id, None)
 
     async def _ensure_connected(self) -> None:
         async with self._connect_lock:
@@ -199,6 +224,16 @@ class OpenClawClient:
                 self._create_background_task(self._send_connect_background())
                 return
             if event_name == "chat":
+                state = payload.get("state")
+                if state and state != "final":
+                    return
+
+                if self._pending_searches:
+                    # FIFO resolution: assume the oldest pending search corresponds to this result
+                    task_id, fut = next(iter(self._pending_searches.items()))
+                    if not fut.done():
+                        fut.set_result(payload)
+                
                 if self.on_chat_message:
                     await self.on_chat_message(payload)
                 return
