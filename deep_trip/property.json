@@ -1,2 +1,7 @@
 {
+    "OPENCLAW_HOST": "ws://localhost:8000",
+    "OPENCLAW_PORT": 8000,
+    "OPENAI_API_KEY": "",
+    "MINIMAX_TTS_API_KEY": "",
+    "MINIMAX_TTS_GROUP_ID": ""
 }
