@@ -1,0 +1,13 @@
+{
+    "type": "extension",
+    "name": "deep_trip",
+    "version": "0.1.0",
+    "display_name": "Deep Trip Extension",
+    "description": "Deep Trip TEN extension",
+    "dependencies": {
+        "ten_runtime_python": "0.2.0"
+    },
+    "api": {
+        "property": {}
+    }
+}
