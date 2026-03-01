@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -26,11 +27,37 @@ class SearchResult:
     timestamp: int
 
 
+class SearchCache:
+    """LRU cache with TTL for search results."""
+
+    def __init__(self, maxsize: int = 50, ttl_seconds: int = 300) -> None:
+        self.maxsize = maxsize
+        self.ttl = ttl_seconds
+        self._cache: OrderedDict = OrderedDict()
+
+    def get(self, key: str) -> list | None:
+        if key in self._cache:
+            ts, results = self._cache[key]
+            if time.time() - ts < self.ttl:
+                self._cache.move_to_end(key)
+                return results
+            del self._cache[key]
+        return None
+
+    def put(self, key: str, results: list) -> None:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = (time.time(), results)
+        if len(self._cache) > self.maxsize:
+            self._cache.popitem(last=False)
+
+
 class OpenClawClient:
     """Executes OpenClaw CLI commands via docker exec against the gateway container."""
 
     def __init__(self, config: OpenClawConfig | None = None) -> None:
         self.config = config or OpenClawConfig()
+        self._cache = SearchCache()
 
     async def _exec(self, *args: str, timeout: int | None = None) -> str:
         """Run `npx openclaw <args>` inside the gateway container and return stdout."""
@@ -120,12 +147,21 @@ class OpenClawClient:
         return await self._exec_json(*args)
 
     async def search(self, query: str, location: str) -> list[SearchResult]:
-        """Send a search prompt to the agent and return results."""
+        """Send a search prompt to the agent and return results (with caching)."""
+        cache_key = f"{query}|{location}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            logger.debug("cache hit: %s", cache_key)
+            return cached
+
         prompt = f"Search for {query} near {location}"
         result = await self.agent(prompt)
         text = self.extract_text(result)
         ts = self.extract_timestamp(result) or int(time.time() * 1000)
-        return [SearchResult(content=text, timestamp=ts)]
+        results = [SearchResult(content=text, timestamp=ts)]
+
+        self._cache.put(cache_key, results)
+        return results
 
     async def memory_search(
         self,

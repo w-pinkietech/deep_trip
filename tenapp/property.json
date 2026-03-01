@@ -92,6 +92,16 @@
                     }
                   ]
                 }
+              ],
+              "data": [
+                {
+                  "name": "data_in",
+                  "dest": [
+                    {
+                      "extension": "deep_trip"
+                    }
+                  ]
+                }
               ]
             },
             {

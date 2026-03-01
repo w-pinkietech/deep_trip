@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import uuid
 import asyncio
 from openai import AsyncOpenAI
@@ -111,7 +112,6 @@ class DeepTripExtension(AsyncExtension):
     async def _send_greeting(self, ten_env: AsyncTenEnv) -> None:
         """Send a greeting when a user joins."""
         if not self.llm_client:
-            # Fallback: send a static greeting directly to TTS
             await self._send_text_to_tts(ten_env, "こんにちは！Deep Tripへようこそ。何かお手伝いできることはありますか？")
             return
 
@@ -121,15 +121,38 @@ class DeepTripExtension(AsyncExtension):
         messages.append({"role": "user", "content": "ユーザーが接続しました。短く温かい挨拶をしてください。"})
 
         try:
-            response = await self.llm_client.chat.completions.create(
+            request_id = str(uuid.uuid4())
+            t0 = time.monotonic()
+            stream = await self.llm_client.chat.completions.create(
                 model=self.llm_model,
                 messages=messages,
                 max_tokens=200,
+                stream=True,
             )
-            greeting = self._strip_thinking(response.choices[0].message.content or "")
-            if greeting:
-                ten_env.log_info(f"Greeting: {greeting[:80]}...")
-                await self._send_text_to_tts(ten_env, greeting)
+
+            full_reply = ""
+            buffer = ""
+            t_first_chunk = None
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                content = chunk.choices[0].delta.content or ""
+                if not content:
+                    continue
+
+                if t_first_chunk is None:
+                    t_first_chunk = time.monotonic()
+                    ten_env.log_info(f"Greeting LLM TTFB: {(t_first_chunk - t0)*1000:.0f}ms")
+
+                buffer += content
+                clean = self._extract_non_thinking_text(buffer)
+                if clean and len(clean) > len(full_reply):
+                    new_text = clean[len(full_reply):]
+                    full_reply = clean
+                    await self._send_text_chunk_to_tts(ten_env, request_id, new_text, is_end=False)
+
+            await self._send_text_chunk_to_tts(ten_env, request_id, "", is_end=True)
+            ten_env.log_info(f"Greeting streamed ({(time.monotonic() - t0)*1000:.0f}ms): {full_reply[:80]}...")
         except Exception as e:
             ten_env.log_warn(f"Greeting LLM call failed: {e}")
             await self._send_text_to_tts(ten_env, "こんにちは！Deep Tripへようこそ。")
@@ -140,7 +163,6 @@ class DeepTripExtension(AsyncExtension):
 
         if data_name == "asr_result":
             try:
-                # TEN runtime get_property_* returns (value, error) tuples
                 is_final, _ = data.get_property_bool("final")
                 text, _ = data.get_property_string("text")
 
@@ -149,16 +171,30 @@ class DeepTripExtension(AsyncExtension):
                     asyncio.create_task(self._handle_user_query(ten_env, text))
             except Exception as e:
                 ten_env.log_warn(f"Failed to parse asr_result: {e}")
+        elif data_name == "data_in":
+            try:
+                raw, _ = data.get_property_string("data")
+                payload = json.loads(raw)
+                if payload.get("cmd") == "update_location":
+                    lat = float(payload["lat"])
+                    lng = float(payload["lng"])
+                    self.location = (lat, lng)
+                    ten_env.log_info(f"Location updated via data channel: {lat}, {lng}")
+            except Exception as e:
+                ten_env.log_warn(f"Failed to parse data channel message: {e}")
 
     async def _handle_user_query(self, ten_env: AsyncTenEnv, text: str) -> None:
-        """Process user query: search context, call LLM, send response to TTS."""
+        """Process user query: search context, call LLM, stream response to TTS."""
+        t0 = time.monotonic()
         location_str = f"{self.location[0]},{self.location[1]}" if self.location else "unknown location"
 
         # Search for context via OpenClaw
         context_info = ""
         if self.client:
             try:
+                t_search = time.monotonic()
                 results = await self.client.search(text, location_str)
+                ten_env.log_info(f"Search latency: {(time.monotonic() - t_search)*1000:.0f}ms")
                 if results and results[0].content:
                     context_info = "\n".join([r.content for r in results if r.content])
                     ten_env.log_info(f"Found {len(results)} search results")
@@ -186,29 +222,80 @@ class DeepTripExtension(AsyncExtension):
 
         try:
             ten_env.log_info(f"Calling LLM with {len(messages)} messages...")
-            response = await self.llm_client.chat.completions.create(
+
+            # Streaming LLM
+            request_id = str(uuid.uuid4())
+            t_llm = time.monotonic()
+            t_first_chunk = None
+            stream = await self.llm_client.chat.completions.create(
                 model=self.llm_model,
                 messages=messages,
                 max_tokens=500,
+                stream=True,
             )
-            reply = self._strip_thinking(response.choices[0].message.content or "")
-            ten_env.log_info(f"LLM reply: {reply[:100]}...")
+
+            full_reply = ""
+            buffer = ""
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                content = chunk.choices[0].delta.content or ""
+                if not content:
+                    continue
+
+                if t_first_chunk is None:
+                    t_first_chunk = time.monotonic()
+                    ten_env.log_info(f"LLM TTFB: {(t_first_chunk - t_llm)*1000:.0f}ms")
+
+                buffer += content
+                clean = self._extract_non_thinking_text(buffer)
+                if clean and len(clean) > len(full_reply):
+                    new_text = clean[len(full_reply):]
+                    full_reply = clean
+                    await self._send_text_chunk_to_tts(ten_env, request_id, new_text, is_end=False)
+
+            # Final chunk
+            await self._send_text_chunk_to_tts(ten_env, request_id, "", is_end=True)
+            ten_env.log_info(f"LLM reply: {full_reply[:100]}...")
+            ten_env.log_info(f"Total pipeline: {(time.monotonic() - t0)*1000:.0f}ms")
 
             # Update conversation history
             self.conversation_history.append({"role": "user", "content": text})
-            self.conversation_history.append({"role": "assistant", "content": reply})
+            self.conversation_history.append({"role": "assistant", "content": full_reply})
             if len(self.conversation_history) > self.max_history:
                 self.conversation_history = self.conversation_history[-self.max_history:]
 
-            if reply:
-                await self._send_text_to_tts(ten_env, reply)
         except Exception as e:
             ten_env.log_warn(f"LLM call failed: {e}")
+
+    @staticmethod
+    def _extract_non_thinking_text(text: str) -> str:
+        """Remove complete <think>...</think> blocks and truncate at unclosed <think> tags."""
+        # Remove complete thinking blocks
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        # Truncate at unclosed <think> tag
+        idx = cleaned.find("<think>")
+        if idx != -1:
+            cleaned = cleaned[:idx]
+        return cleaned.strip()
 
     @staticmethod
     def _strip_thinking(text: str) -> str:
         """Remove <think>...</think> reasoning blocks from LLM output."""
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+    async def _send_text_chunk_to_tts(self, ten_env: AsyncTenEnv, request_id: str, text: str, is_end: bool) -> None:
+        """Send an incremental text chunk to the TTS extension."""
+        output_data = Data.create("tts_text_input")
+        payload = json.dumps({
+            "request_id": request_id,
+            "text": text,
+            "text_input_end": is_end,
+        })
+        output_data.set_property_from_json("", payload)
+        await ten_env.send_data(output_data)
+        if text:
+            ten_env.log_debug(f"TTS chunk (req={request_id[:8]}): {text[:40]}...")
 
     async def _send_text_to_tts(self, ten_env: AsyncTenEnv, text: str) -> None:
         """Send text data to the TTS extension as TTSTextInput."""
