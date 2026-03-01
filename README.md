@@ -3,22 +3,32 @@
 Vox Tokyo Hackathon 2024 Project
 Track: ⛩️ Omotenashi AI — Real-time cultural companion for tourists in Japan
 
-## Project Overview
-Deep Trip is a voice-powered AI assistant built as a **TEN Framework Extension**. It provides real-time cultural and historical information about your current location in Japan.
-The system uses the TEN Framework's graph architecture to connect ASR, LLM, TTS, and our custom "Cultural Guide" logic.
+## Background & Problem
+The Japan Tourism Agency has set an ambitious target of **60 million inbound visitors by 2030**. While the number of visitors is recovering rapidly—reaching **25.07 million in 2023** and projected to exceed **35 million in 2024**—a critical challenge remains in regional tourism. The government aims to increase the **average length of stay in regional areas to 3 days**, but the current average remains **less than 2 days**.
 
-## Core Concept
-**"Your Personal Cultural Whisperer"**
-- Uses your GPS location to identify where you are
-- Searches the internet in real-time for cultural/historical information
-- Explains it naturally in Japanese with MiniMax's emotionally expressive voice
-- Provides cultural etiquette tips and local insights on-the-spot
+Japan has many hidden gems, but they are often not sufficiently explained in foreign languages. Additionally, due to language barriers, local residents often miss opportunities to convey the charm of their hometowns to international travelers. This information gap contributes to the concentration of tourists in major cities and shorter stays in regional areas.
+
+## Value Proposition
+**"The joy of suddenly receiving an explanation about where you are from the app."**
+
+Deep Trip verbalizes the deep charm of each location—nuances that even Japanese people might miss—through the power of technology and delivers it to travelers.
+
+## Solution
+Deep Trip is a tool designed to solve these challenges. By utilizing location data to provide real-time, multi-lingual explanations of local culture and history, it enhances the satisfaction of regional stays and contributes to extending the duration of visits.
+
+Technically, Deep Trip is a voice-powered AI assistant built as a **TEN Framework Extension**. It provides real-time cultural and historical information about your current location in Japan. The system uses the TEN Framework's graph architecture to connect ASR, LLM, TTS, and our custom "Cultural Guide" logic.
+
+### Core Features
+- **Location-Aware**: Uses your GPS location to identify where you are.
+- **Real-Time Knowledge**: Searches the internet in real-time for cultural/historical information.
+- **Cultural Whisperer**: Explains it naturally in Japanese/English with MiniMax's emotionally expressive voice.
+- **Omotenashi Guide**: Provides cultural etiquette tips and local insights on-the-spot.
 
 ## Technology Stack
 - **Framework**: [TEN Framework](https://github.com/TEN-framework/ten-framework) (Python Extension)
 - **AI Models**: 
   - **LLM**: MiniMax M2.5 (Intelligence & Reasoning)
-  - **TTS**: MiniMax Speech (Japanese)
+  - **TTS**: MiniMax Speech (Japanese/English)
   - **ASR**: Local Whisper / Deepgram
 - **Development Tools**: `tman` (TEN Manager), Python 3.10+
 
