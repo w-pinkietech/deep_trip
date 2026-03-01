@@ -1,14 +1,58 @@
 # Deep Trip - Hackathon Demo Script (3 minutes)
 
-## Pre-Demo Checklist
+## Pre-Demo Setup
 
-- [ ] Run preflight check: `python demo/preflight_check.py`
-- [ ] Docker Desktop running with OpenClaw container up
-- [ ] TEN runtime started (`task run` or Docker Compose)
-- [ ] Test client open in browser: `test_client/index.html`
-- [ ] `.env` file populated with all required keys (see `.env.example`)
+### 1. Environment
+
+```bash
+# Copy and fill in API keys (if not done already)
+cp .env.example .env
+# Required keys: OPENAI_API_KEY, DEEPGRAM_API_KEY, AGORA_APP_ID,
+#   AGORA_APP_CERTIFICATE, MINIMAX_TTS_API_KEY, MINIMAX_TTS_GROUP_ID
+
+# Run preflight check
+python3.10 demo/preflight_check.py
+```
+
+### 2. Start OpenClaw (if not already running)
+
+```bash
+# In your openclaw directory:
+docker compose up -d
+
+# Verify:
+docker ps | grep openclaw
+```
+
+### 3. Start TEN App (Terminal 1)
+
+```bash
+./setup_and_run.sh run
+```
+
+This sets the required `PYTHONPATH` (for `ten_ai_base`) and `LD_LIBRARY_PATH`
+(for `libagora_rtc_sdk.so`), exports `.env` variables, and starts the TEN runtime.
+
+If you need to build first: `./setup_and_run.sh all`
+
+### 4. Start Test Client (Terminal 2)
+
+```bash
+cd test_client
+python3.10 server.py
+```
+
+The HTTPS server starts at `https://localhost:3000`.
+For Tailscale access: `https://<tailscale-ip>:3000`
+
+### Pre-Demo Checklist
+
+- [ ] Docker running with OpenClaw container up (`docker ps | grep openclaw`)
+- [ ] TEN app running (logs show `on_start() done` for all extensions)
+- [ ] Test client at `https://localhost:3000` loads in browser
+- [ ] `.env` file populated with all required keys
 - [ ] Microphone and speakers tested
-- [ ] Browser tab with test client in focus, log panel visible
+- [ ] Browser has granted microphone permission
 
 ---
 
@@ -82,10 +126,16 @@
 
 | Problem | Solution |
 |---------|----------|
-| No audio from agent | Check TTS API key in `.env`, verify MiniMax TTS container logs |
+| `ModuleNotFoundError: No module named 'ten_ai_base'` | `PYTHONPATH` is not set. Use `./setup_and_run.sh run` instead of running the binary directly. |
+| `libagora_rtc_sdk.so: cannot open shared object file` | `LD_LIBRARY_PATH` is not set. Use `./setup_and_run.sh run`. |
+| `Environment variable AGORA_APP_ID is not found` | `.env` vars are not exported. Use `set -a && source .env && set +a` before running, or use `./setup_and_run.sh run`. |
+| `ModuleNotFoundError: No module named 'agora_token_builder'` | Install with `python3.10 -m pip install agora_token_builder` |
+| `OSError: Address already in use` (port 3000) | Kill the existing process: `lsof -i :3000` then `kill <PID>` |
+| Wrong Python version errors | The TEN addon loader links against **Python 3.10**. All pip installs must use `python3.10 -m pip`. Do NOT use pyenv Python 3.12. |
+| No audio from agent | Check TTS API key in `.env`, verify MiniMax TTS logs in TEN output |
 | Agent not responding | Check Deepgram ASR key, verify microphone permissions in browser |
 | Slow responses (>5s) | OpenClaw may be cold-starting; repeat the query (cache will kick in) |
-| "Connection failed" | Verify Agora APP_ID, check TEN runtime is running |
+| "Connection failed" in browser | Verify Agora APP_ID, check TEN runtime is running |
 | OpenClaw errors | Run `docker ps` to confirm container is up; run `docker logs <container>` |
 | Location not updating | Ensure you selected a preset or granted GPS permission |
 | Fallback responses | If LLM is down, the system uses cached fallback responses automatically |
