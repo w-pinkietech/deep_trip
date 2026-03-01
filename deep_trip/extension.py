@@ -94,9 +94,26 @@ class DeepTripExtension(AsyncExtension):
                         except Exception as e:
                             ten_env.log_warn(f"Search failed: {e}")
 
-                    enriched_text = text
+                    # Assemble enriched prompt
+                    prompt_parts = []
+                    
+                    # System prompt
+                    system_prompt = await ten_env.get_property_string("SYSTEM_PROMPT")
+                    if system_prompt:
+                        prompt_parts.append(f"System Instructions:\n{system_prompt}")
+                    
+                    # Location context
+                    if self.location:
+                        prompt_parts.append(f"Current User Location: {location_str}")
+                    
+                    # Search context
                     if context_info:
-                        enriched_text = f"Context from OpenClaw:\n{context_info}\n\nUser Query: {text}"
+                        prompt_parts.append(f"Context from Search:\n{context_info}")
+                    
+                    # User query
+                    prompt_parts.append(f"User Query: {text}")
+                    
+                    enriched_text = "\n\n".join(prompt_parts)
 
                     output_data = Data.create("text_data")
                     output_data.set_property_string("text", enriched_text)
