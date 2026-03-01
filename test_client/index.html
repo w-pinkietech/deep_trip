@@ -102,6 +102,134 @@
       color: #888;
     }
 
+    /* --- Agent Status Indicator --- */
+    .agent-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      background: #2d2d3d;
+      margin-bottom: 1.5rem;
+    }
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #666;
+      flex-shrink: 0;
+    }
+    .status-dot.idle { background: #666; }
+    .status-dot.listening {
+      background: #4caf50;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-dot.speaking {
+      background: #ff9800;
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+      50% { opacity: 0.7; box-shadow: 0 0 8px 4px currentColor; }
+    }
+    .status-dot.listening { color: #4caf50; }
+    .status-dot.speaking { color: #ff9800; }
+    .agent-status-text {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #aaa;
+    }
+
+    /* --- Location Panel --- */
+    .location-panel {
+      background: #2d2d3d;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .location-panel h3 {
+      font-size: 0.9rem;
+      color: #4fc3f7;
+      margin-bottom: 0.75rem;
+    }
+    .location-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .location-row select,
+    .location-row button {
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .location-row select { flex: 1; }
+    .location-row button {
+      white-space: nowrap;
+      background: #4fc3f7;
+      color: #111;
+      border: none;
+      font-weight: 600;
+    }
+    .location-row button:hover { background: #39aed9; }
+    .location-coords {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      color: #4fc3f7;
+      background: #111;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      text-align: center;
+    }
+
+    /* --- Conversation Transcript --- */
+    .transcript {
+      margin-top: 1.5rem;
+      background: #111;
+      border-radius: 8px;
+      padding: 1rem;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .transcript h3 {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 0.75rem;
+    }
+    .transcript-entry {
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.5rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      background: #1a1a2e;
+    }
+    .transcript-entry.user {
+      border-left: 3px solid #4fc3f7;
+    }
+    .transcript-entry.agent {
+      border-left: 3px solid #4caf50;
+    }
+    .transcript-role {
+      font-weight: 600;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+    .transcript-entry.user .transcript-role { color: #4fc3f7; }
+    .transcript-entry.agent .transcript-role { color: #4caf50; }
+    .transcript-text { color: #ccc; }
+    .transcript-time {
+      font-size: 0.65rem;
+      color: #555;
+      margin-top: 0.2rem;
+    }
+
     .log {
       margin-top: 1.5rem;
       background: #111;
@@ -148,6 +276,38 @@
       <button id="btn-leave" class="btn btn-leave" onclick="leaveChannel()">
         Leave Channel
       </button>
+    </div>
+
+    <!-- Agent Status Indicator -->
+    <div id="agent-status" class="agent-status" style="display:none;">
+      <div id="status-dot" class="status-dot idle"></div>
+      <span id="agent-status-text" class="agent-status-text">Agent Idle</span>
+    </div>
+
+    <!-- Location Panel -->
+    <div id="location-panel" class="location-panel" style="display:none;">
+      <h3>Location</h3>
+      <div class="location-row">
+        <select id="location-preset" onchange="applyPresetLocation()">
+          <option value="">-- Select preset --</option>
+          <option value="35.7148,139.7967">Senso-ji Temple</option>
+          <option value="35.6580,139.7016">Shibuya Crossing</option>
+          <option value="35.6764,139.6993">Meiji Jingu Shrine</option>
+          <option value="35.6586,139.7454">Tokyo Tower</option>
+          <option value="35.6654,139.7707">Tsukiji Market</option>
+          <option value="35.7146,139.7734">Ueno Park</option>
+          <option value="35.7023,139.7745">Akihabara</option>
+          <option value="35.6812,139.7671">Tokyo Station</option>
+        </select>
+        <button onclick="startGPS()">GPS</button>
+      </div>
+      <div id="location-coords" class="location-coords">No location set</div>
+    </div>
+
+    <!-- Conversation Transcript -->
+    <div id="transcript" class="transcript" style="display:none;">
+      <h3>Conversation</h3>
+      <div id="transcript-entries"></div>
     </div>
 
     <div id="log" class="log"></div>
@@ -241,11 +401,15 @@
         setStatus('Connected - Speak to the guide!', 'connected');
         document.getElementById('join-section').style.display = 'none';
         document.getElementById('controls').classList.add('active');
+        document.getElementById('agent-status').style.display = 'flex';
+        document.getElementById('location-panel').style.display = 'block';
+        document.getElementById('transcript').style.display = 'block';
 
-        // Volume monitoring
+        // Volume monitoring + agent status detection + mock transcript
         volumeInterval = setInterval(() => {
+          let localVol = 0;
           if (localAudioTrack) {
-            const localVol = localAudioTrack.getVolumeLevel() * 100;
+            localVol = localAudioTrack.getVolumeLevel() * 100;
             document.getElementById('local-vol').style.width = localVol + '%';
           }
           const remoteUsers = client.remoteUsers;
@@ -257,6 +421,43 @@
             }
           });
           document.getElementById('remote-vol').style.width = maxRemoteVol + '%';
+
+          // Agent status detection
+          if (maxRemoteVol > SPEAKING_THRESHOLD) {
+            setAgentStatus('speaking');
+          } else if (localVol > LISTENING_THRESHOLD) {
+            setAgentStatus('listening');
+          } else {
+            setAgentStatus('idle');
+          }
+
+          // Mock transcript: detect user speaking bursts
+          if (localVol > LISTENING_THRESHOLD) {
+            if (!userSpeakingTimer) {
+              userSpeakingTimer = setTimeout(() => {
+                addTranscript('user', MOCK_USER_PHRASES[mockUserIdx % MOCK_USER_PHRASES.length]);
+                mockUserIdx++;
+                userSpeakingTimer = null;
+              }, 2000);
+            }
+          } else if (userSpeakingTimer) {
+            clearTimeout(userSpeakingTimer);
+            userSpeakingTimer = null;
+          }
+
+          // Mock transcript: detect agent speaking bursts
+          if (maxRemoteVol > SPEAKING_THRESHOLD) {
+            if (!agentSpeakingTimer) {
+              agentSpeakingTimer = setTimeout(() => {
+                addTranscript('agent', MOCK_AGENT_PHRASES[mockAgentIdx % MOCK_AGENT_PHRASES.length]);
+                mockAgentIdx++;
+                agentSpeakingTimer = null;
+              }, 2000);
+            }
+          } else if (agentSpeakingTimer) {
+            clearTimeout(agentSpeakingTimer);
+            agentSpeakingTimer = null;
+          }
         }, 100);
 
       } catch (err) {
@@ -292,10 +493,119 @@
         document.getElementById('join-section').style.display = 'block';
         document.getElementById('btn-join').disabled = false;
         document.getElementById('controls').classList.remove('active');
+        document.getElementById('agent-status').style.display = 'none';
+        document.getElementById('location-panel').style.display = 'none';
+        document.getElementById('transcript').style.display = 'none';
+        setAgentStatus('idle');
         isMuted = false;
       } catch (err) {
         log(`Error leaving: ${err.message}`, 'error');
       }
+    }
+
+    // --- Agent Status ---
+    let currentAgentStatus = 'idle';
+    const SPEAKING_THRESHOLD = 8;
+    const LISTENING_THRESHOLD = 5;
+
+    function setAgentStatus(status) {
+      if (status === currentAgentStatus) return;
+      currentAgentStatus = status;
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('agent-status-text');
+      dot.className = 'status-dot ' + status;
+      const labels = { idle: 'Agent Idle', listening: 'Agent Listening', speaking: 'Agent Speaking' };
+      text.textContent = labels[status] || 'Agent Idle';
+    }
+
+    // --- Location ---
+    let currentLat = null;
+    let currentLng = null;
+    let gpsWatchId = null;
+
+    function updateLocationDisplay(lat, lng) {
+      currentLat = lat;
+      currentLng = lng;
+      document.getElementById('location-coords').textContent =
+        `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`;
+    }
+
+    function sendLocationToAgent(lat, lng) {
+      if (!client) return;
+      try {
+        const msg = JSON.stringify({ cmd: 'update_location', lat, lng });
+        client.sendStreamMessage(new TextEncoder().encode(msg));
+        log(`Location sent: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 'info');
+      } catch (e) {
+        log(`Failed to send location: ${e.message}`, 'warn');
+      }
+    }
+
+    function applyPresetLocation() {
+      const sel = document.getElementById('location-preset');
+      if (!sel.value) return;
+      const [lat, lng] = sel.value.split(',').map(Number);
+      updateLocationDisplay(lat, lng);
+      sendLocationToAgent(lat, lng);
+      log(`Preset location: ${sel.options[sel.selectedIndex].text}`, 'info');
+    }
+
+    function startGPS() {
+      if (!navigator.geolocation) {
+        log('Geolocation not supported', 'error');
+        return;
+      }
+      if (gpsWatchId !== null) {
+        navigator.geolocation.clearWatch(gpsWatchId);
+        gpsWatchId = null;
+        log('GPS tracking stopped', 'info');
+        return;
+      }
+      log('Starting GPS tracking...', 'info');
+      gpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          updateLocationDisplay(latitude, longitude);
+          sendLocationToAgent(latitude, longitude);
+          document.getElementById('location-preset').value = '';
+        },
+        (err) => {
+          log(`GPS error: ${err.message}`, 'error');
+        },
+        { enableHighAccuracy: true, maximumAge: 5000 }
+      );
+    }
+
+    // --- Transcript ---
+    const MOCK_USER_PHRASES = [
+      'What is this place?',
+      'Tell me about the history here.',
+      'Where should I go next?',
+      'What can I see nearby?',
+    ];
+    const MOCK_AGENT_PHRASES = [
+      'This area has a rich cultural heritage dating back centuries.',
+      'I recommend heading north to explore the shrine grounds.',
+      'There are several notable landmarks within walking distance.',
+      'The architecture here reflects traditional Edo-period design.',
+    ];
+    let mockUserIdx = 0;
+    let mockAgentIdx = 0;
+    let userSpeakingTimer = null;
+    let agentSpeakingTimer = null;
+
+    function addTranscript(role, text) {
+      const container = document.getElementById('transcript-entries');
+      const entry = document.createElement('div');
+      entry.className = 'transcript-entry ' + role;
+      const ts = new Date().toLocaleTimeString();
+      entry.innerHTML =
+        `<div class="transcript-role">${role === 'user' ? 'You' : 'Guide'}</div>` +
+        `<div class="transcript-text">${text}</div>` +
+        `<div class="transcript-time">${ts}</div>`;
+      container.appendChild(entry);
+      const panel = document.getElementById('transcript');
+      panel.scrollTop = panel.scrollHeight;
     }
   </script>
 </body>

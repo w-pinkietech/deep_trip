@@ -1,109 +1,135 @@
-# 🎤 Deep Trip - Voice-Powered Cultural Guide
+# Deep Trip - Voice-Powered Cultural Guide
 
 Vox Tokyo Hackathon 2024 Project
-Track: ⛩️ Omotenashi AI — Real-time cultural companion for tourists in Japan
+Track: Omotenashi AI -- Real-time cultural companion for tourists in Japan
 
-## Background & Problem
-The Japan Tourism Agency has set an ambitious target of **60 million inbound visitors by 2030**. While the number of visitors is recovering rapidly—reaching **25.07 million in 2023** and projected to exceed **35 million in 2024**—a critical challenge remains in regional tourism. The government aims to increase the **average length of stay in regional areas to 3 days**, but the current average remains **less than 2 days**.
+## Architecture
 
-Japan has many hidden gems, but they are often not sufficiently explained in foreign languages. Additionally, due to language barriers, local residents often miss opportunities to convey the charm of their hometowns to international travelers. This information gap contributes to the concentration of tourists in major cities and shorter stays in regional areas.
+```
+[Agora RTC] -> [Deepgram ASR] -> [Deep Trip Extension] -> [MiniMax M2.5 LLM] -> [MiniMax TTS] -> [Agora RTC]
+                                         |
+                                   [OpenClaw Search]
+                                   (Docker CLI)
+```
 
-## Value Proposition
-**"The joy of suddenly receiving an explanation about where you are from the app."**
+**Built-in TEN extensions** (no custom code): `agora_rtc`, `deepgram_asr_python`, `openai_llm2_python`, `minimax_tts_websocket_python`, `streamid_adapter`
 
-Deep Trip verbalizes the deep charm of each location—nuances that even Japanese people might miss—through the power of technology and delivers it to travelers.
+**Custom extension** (what we build): `deep_trip` -- cultural guide orchestrator
 
-## Solution
-Deep Trip is a tool designed to solve these challenges. By utilizing location data to provide real-time, multi-lingual explanations of local culture and history, it enhances the satisfaction of regional stays and contributes to extending the duration of visits.
+## Project Structure
 
-Technically, Deep Trip is a voice-powered AI assistant built as a **TEN Framework Extension**. It provides real-time cultural and historical information about your current location in Japan. The system uses the TEN Framework's graph architecture to connect ASR, LLM, TTS, and our custom "Cultural Guide" logic.
+```
+deep_trip/
+  extension.py          # Core DeepTripExtension (streaming LLM, location, search)
+  openclaw_client.py    # OpenClaw Docker CLI wrapper with LRU cache
+  addon.py              # TEN addon registration
+  demo_fallback.py      # Cached responses for demo reliability
+  manifest.json         # Extension metadata & API schema
+  tests/                # Unit + integration + cultural accuracy tests
+tenapp/
+  main.go               # Go entry point
+  manifest.json         # App dependencies
+  property.json         # Graph definition & node config
+  bin/main              # Built binary
+  ten_packages/         # Installed TEN extensions & system packages
+test_client/
+  index.html            # Demo UI (Agora + GPS + transcript + status)
+  server.py             # HTTPS server with token generation
+scripts/
+  verify_minimax.py     # MiniMax M2.5 API verification
+  send_location.py      # Mock GPS location sender
+  measure_latency.py    # Latency benchmarking
+demo/
+  demo_script.md        # 3-minute hackathon demo script
+  preflight_check.py    # Pre-demo service validation
+```
 
-### Core Features
-- **Location-Aware**: Uses your GPS location to identify where you are.
-- **Real-Time Knowledge**: Searches the internet in real-time for cultural/historical information.
-- **Cultural Whisperer**: Explains it naturally in Japanese/English with MiniMax's emotionally expressive voice.
-- **Omotenashi Guide**: Provides cultural etiquette tips and local insights on-the-spot.
+## Quick Start
+
+### Prerequisites
+
+- **Python 3.10** (required -- TEN runtime links against libpython3.10)
+- **Go 1.23+**
+- **Docker** (for OpenClaw)
+- **tman** (TEN package manager)
+
+### 1. Clone and configure
+
+```bash
+git clone <repo-url> && cd deep_trip
+cp .env.example .env
+# Fill in: OPENAI_API_KEY, DEEPGRAM_API_KEY, AGORA_APP_ID,
+#   AGORA_APP_CERTIFICATE, MINIMAX_TTS_API_KEY, MINIMAX_TTS_GROUP_ID
+```
+
+### 2. Start OpenClaw
+
+```bash
+# In your openclaw directory:
+docker compose up -d
+```
+
+### 3. Build and run (first time)
+
+```bash
+./setup_and_run.sh all
+```
+
+This installs Go, tman, builds the TEN app, and starts it. For subsequent runs:
+
+```bash
+./setup_and_run.sh run
+```
+
+### 4. Start the demo UI (separate terminal)
+
+```bash
+cd test_client
+python3.10 server.py
+```
+
+### 5. Open the demo
+
+Open `https://localhost:3000` (or `https://<tailscale-ip>:3000` for remote).
+Accept the self-signed certificate, click "Join Channel", and start talking.
+
+## Important: Python 3.10 Requirement
+
+The TEN runtime's Python addon loader (`libpython_addon_loader.so`) links against
+`libpython3.10.so`. This means:
+
+- All Python packages must be installed via `python3.10 -m pip install ...`
+- Do NOT use pyenv Python 3.12 or other versions
+- The `setup_and_run.sh` script handles this automatically
+
+## Environment Variables
+
+The `setup_and_run.sh run` command automatically sets these critical paths:
+
+| Variable | Purpose |
+|----------|---------|
+| `PYTHONPATH` | Adds `ten_ai_base/interface` and `ten_runtime_python/interface` so TEN system packages are importable |
+| `LD_LIBRARY_PATH` | Adds `agora_rtc_sdk/lib` so `libagora_rtc_sdk.so` is found at runtime |
+
+Running the binary directly without these will fail with `ModuleNotFoundError` or `dlopen` errors.
+
+## Running Tests
+
+```bash
+python3.10 -m pytest deep_trip/tests/ -v
+```
+
+## Demo
+
+See [demo/demo_script.md](demo/demo_script.md) for the full 3-minute hackathon demo script.
+
+Pre-flight check: `python3.10 demo/preflight_check.py`
 
 ## Technology Stack
-- **Framework**: [TEN Framework](https://github.com/TEN-framework/ten-framework) (Python Extension)
-- **AI Models**: 
-  - **LLM**: MiniMax M2.5 (Intelligence & Reasoning)
-  - **TTS**: MiniMax Speech (Japanese/English)
-  - **ASR**: Local Whisper / Deepgram
-- **Development Tools**: `tman` (TEN Manager), Python 3.10+
 
-## Development Guide
-
-This project is developed as a custom **TEN Agent Extension** in Python.
-
-### 1. Prerequisites
-Ensure you have the TEN Framework tools installed:
-```bash
-# Verify tman installation
-tman --version
-# Expected: TEN Framework version: <version>
-```
-
-### 2. Create Extension Project
-We use the official Python template to scaffold the extension:
-
-```bash
-# Create the project structure
-tman create extension deep_trip_extension --template default_extension_python
-```
-
-### 3. Project Structure
-The generated extension follows the standard TEN directory structure:
-```
-deep_trip_extension/
-├── manifest.json         # Metadata, dependencies, and interface definitions
-├── property.json         # Configuration (API keys, default prompts)
-├── requirements.txt      # Python dependencies (e.g., requests, beautifulsoup4)
-├── src/
-│   ├── main.py           # Entry point
-│   └── extension.py      # Core Logic: Location handling & Web Search
-├── tests/
-│   └── test_basic.py     # Unit tests
-└── .vscode/              # Debug configurations
-```
-
-### 4. Implementation Steps
-
-#### Step A: Install Dependencies
-```bash
-cd deep_trip_extension
-tman install --standalone
-```
-
-#### Step B: Core Logic (`src/extension.py`)
-We implement the `DeepTripExtension` class inheriting from `AsyncExtension`.
-Key responsibilities:
-1.  Receive `on_cmd` (User Voice/Text + Location Data)
-2.  Perform Real-time Web Search (Google Places / Wikipedia API)
-3.  Generate "Omotenashi" response using MiniMax LLM
-4.  Send text back to TTS extension
-
-#### Step C: Configuration (`property.json`)
-Define necessary properties for the extension:
-```json
-{
-  "minimax_api_key": "",
-  "google_maps_api_key": "",
-  "system_prompt": "You are an Omotenashi guide..."
-}
-```
-
-### 5. Build & Test
-Verify the extension logic in isolation before integrating into the full graph.
-```bash
-# Run unit tests
-tman run test
-```
-
-### 6. Integration (Graph)
-To run the full assistant, we configure the TEN Agent graph to include:
-`[ASR] -> [Deep Trip Extension] -> [TTS]`
-
-## Reference
-- [TEN Framework Extension Development Guide](https://github.com/TEN-framework/ten-framework/blob/main/docs/development/how_to_develop_with_ext.md)
-- [MiniMax API Documentation](https://platform.minimaxi.com/)
+- **Framework**: [TEN Framework](https://github.com/TEN-framework/ten-framework)
+- **LLM**: MiniMax M2.5 (via OpenAI-compatible API)
+- **TTS**: MiniMax Speech WebSocket
+- **ASR**: Deepgram (nova-3)
+- **Audio Transport**: Agora RTC
+- **Search**: OpenClaw (Docker CLI)

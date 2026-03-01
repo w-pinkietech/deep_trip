@@ -22,6 +22,15 @@
         },
         "SYSTEM_PROMPT": {
           "type": "string"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "base_url": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
         }
       }
     }

@@ -157,13 +157,22 @@ build_app() {
     # Install dependencies via tman
     tman --verbose install
 
+    # IMPORTANT: TEN runtime's Python addon loader links against libpython3.10.
+    # All pip installs MUST use Python 3.10 to match. Using a different version
+    # (e.g. 3.12 via pyenv) causes ModuleNotFoundError at runtime.
+    local PIP="python3.10 -m pip"
+    if ! python3.10 --version &>/dev/null; then
+        warn "python3.10 not found, falling back to pip (may cause version mismatch)"
+        PIP="pip"
+    fi
+
     # Install Python requirements for all extensions
-    info "Installing Python requirements..."
+    info "Installing Python requirements (using Python 3.10)..."
     if [ -d "ten_packages/extension" ]; then
         for ext in ten_packages/extension/*/; do
             if [ -f "${ext}requirements.txt" ]; then
                 info "  pip install for $(basename "$ext")"
-                pip install -r "${ext}requirements.txt" 2>&1 | tail -1
+                $PIP install -r "${ext}requirements.txt" 2>&1 | tail -1
             fi
         done
     fi
@@ -171,7 +180,7 @@ build_app() {
         for sys in ten_packages/system/*/; do
             if [ -f "${sys}requirements.txt" ]; then
                 info "  pip install for $(basename "$sys")"
-                pip install -r "${sys}requirements.txt" 2>&1 | tail -1
+                $PIP install -r "${sys}requirements.txt" 2>&1 | tail -1
             fi
         done
     fi
@@ -205,10 +214,16 @@ run_app() {
         exit 1
     fi
 
-    # Load env vars
+    # Load env vars (set -a exports them so the TEN runtime can read them)
     set -a
     source "${REPO_ROOT}/.env"
     set +a
+
+    # CRITICAL: The TEN runtime's embedded Python needs these paths to find
+    # system packages (ten_ai_base, ten_runtime) and native libraries (Agora SDK).
+    # Without these, extensions fail with ModuleNotFoundError or dlopen errors.
+    export PYTHONPATH="${REPO_ROOT}/tenapp/ten_packages/system/ten_ai_base/interface:${REPO_ROOT}/tenapp/ten_packages/system/ten_runtime_python/interface:${PYTHONPATH:-}"
+    export LD_LIBRARY_PATH="${REPO_ROOT}/tenapp/ten_packages/system/agora_rtc_sdk/lib:${REPO_ROOT}/tenapp/ten_packages/extension/agora_rtc/lib:${LD_LIBRARY_PATH:-}"
 
     info "============================================"
     info "  Starting Deep Trip"
@@ -218,13 +233,11 @@ run_app() {
     if command -v tailscale &>/dev/null; then
         local ts_ip
         ts_ip=$(tailscale ip -4 2>/dev/null || echo "unknown")
-        info "  http://${ts_ip}:8080  (API)"
-        info "  http://${ts_ip}:3000  (Web UI)"
+        info "  https://${ts_ip}:3000  (Web UI)"
     fi
     info ""
     info "Local access:"
-    info "  http://localhost:8080  (API)"
-    info "  http://localhost:3000  (Web UI)"
+    info "  https://localhost:3000  (Web UI)"
     info ""
     info "Press Ctrl+C to stop."
     info ""
