@@ -12,7 +12,13 @@
               "addon": "agora_rtc",
               "property": {
                 "app_id": "${env:AGORA_APP_ID}",
+                "app_certificate": "${env:AGORA_APP_CERTIFICATE|}",
                 "channel": "deep_trip_demo",
+                "stream_id": 1234,
+                "remote_stream_id": 123,
+                "subscribe_audio": true,
+                "publish_audio": true,
+                "publish_data": true,
                 "enable_agora_asr": false
               }
             },
@@ -24,9 +30,13 @@
             {
               "type": "extension",
               "name": "asr",
-              "addon": "openai_asr_python",
+              "addon": "deepgram_asr_python",
               "property": {
-                "api_key": "${env:OPENAI_API_KEY}"
+                "params": {
+                  "key": "${env:DEEPGRAM_API_KEY}",
+                  "model": "nova-3",
+                  "language": "en-US"
+                }
               }
             },
             {
@@ -35,17 +45,10 @@
               "addon": "deep_trip",
               "property": {
                 "OPENCLAW_HOST": "${env:OPENCLAW_HOST}",
-                "SYSTEM_PROMPT": "${env:SYSTEM_PROMPT}"
-              }
-            },
-            {
-              "type": "extension",
-              "name": "llm",
-              "addon": "openai_llm2_python",
-              "property": {
+                "SYSTEM_PROMPT": "${env:SYSTEM_PROMPT}",
                 "api_key": "${env:OPENAI_API_KEY}",
-                "model": "gpt-4o",
-                "base_url": "https://api.openai.com/v1"
+                "model": "MiniMax-M2.5",
+                "base_url": "https://api.minimax.io/v1"
               }
             },
             {
@@ -121,20 +124,7 @@
               "extension": "deep_trip",
               "data": [
                 {
-                  "name": "text_data",
-                  "dest": [
-                    {
-                      "extension": "llm"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "extension": "llm",
-              "data": [
-                {
-                  "name": "text_data",
+                  "name": "tts_text_input",
                   "dest": [
                     {
                       "extension": "tts"
@@ -165,7 +155,7 @@
         {
           "matchers": [
             {
-              "level": "info"
+              "level": "debug"
             }
           ],
           "formatter": {

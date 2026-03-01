@@ -1,13 +1,37 @@
 {
-    "type": "extension",
-    "name": "deep_trip",
-    "version": "0.1.0",
-    "display_name": "Deep Trip Extension",
-    "description": "Deep Trip TEN extension",
-    "dependencies": {
-        "ten_runtime_python": "0.2.0"
+  "type": "extension",
+  "name": "deep_trip",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "type": "system",
+      "name": "ten_runtime_python",
+      "version": "0.11"
     },
-    "api": {
-        "property": {}
+    {
+      "type": "system",
+      "name": "ten_ai_base",
+      "version": "0.7"
     }
+  ],
+  "api": {
+    "property": {
+      "properties": {
+        "OPENCLAW_HOST": {
+          "type": "string"
+        },
+        "SYSTEM_PROMPT": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "package": {
+    "include": [
+      "manifest.json",
+      "property.json",
+      "**.py",
+      "requirements.txt"
+    ]
+  }
 }

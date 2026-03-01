@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "type": "system",
+      "name": "ten_runtime_go",
+      "version": "0.11.55",
+      "hash": "17176211a7faecce333f298bf8bd762ea8a8c0462a80fce7b600f4194c9c5546",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime"
+        }
+      ],
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    },
+    {
+      "type": "system",
+      "name": "ten_ai_base",
+      "version": "0.7.35",
+      "hash": "c0559982cec45471511446cb7224b945ad614f269c9e0d3c199959bf9ede752f",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        }
+      ]
+    },
+    {
+      "type": "extension",
+      "name": "agora_rtc",
+      "version": "0.23.9-t1",
+      "hash": "6f08c87c362d30bbfd831899435fec06982a2924bd9cc0f5cb7e936974bf5731",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime"
+        },
+        {
+          "type": "system",
+          "name": "agora_rtc_sdk"
+        }
+      ],
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    },
+    {
+      "type": "extension",
+      "name": "streamid_adapter",
+      "version": "0.2.0",
+      "hash": "6df9a1b48a4007339ccbda84ff96a4ed4eb5df498b8fef021ca2302be7c55051",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        }
+      ],
+      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/streamid_adapter"
+    },
+    {
+      "type": "extension",
+      "name": "deepgram_asr_python",
+      "version": "0.3.2",
+      "hash": "1cdc274d250a58f659a8b8998d49885bb9d356373b576042e46ee701b131135c",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        },
+        {
+          "type": "system",
+          "name": "ten_ai_base"
+        }
+      ],
+      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/deepgram_asr_python"
+    },
+    {
+      "type": "extension",
+      "name": "openai_llm2_python",
+      "version": "0.2.0",
+      "hash": "ad24801cf718276830749bc50d72c5eba969e5d0ae7538ebd6e6d1ad0b414244",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        },
+        {
+          "type": "system",
+          "name": "ten_ai_base"
+        }
+      ],
+      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/openai_llm2_python"
+    },
+    {
+      "type": "extension",
+      "name": "minimax_tts_websocket_python",
+      "version": "0.4.0",
+      "hash": "8bc3ae28854a5fdcc6a64bde759e80d33b20e0be2df7aa56fa75381b77b38521",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        },
+        {
+          "type": "system",
+          "name": "ten_ai_base"
+        }
+      ],
+      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/minimax_tts_websocket_python"
+    },
+    {
+      "type": "extension",
+      "name": "deep_trip",
+      "version": "0.1.0",
+      "hash": "a5dd17036912b4f7dd7ade8ce30af59b2671240314474cee5130a6d9b3c48fbf",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        },
+        {
+          "type": "system",
+          "name": "ten_ai_base"
+        }
+      ],
+      "path": "../deep_trip"
+    },
+    {
+      "type": "system",
+      "name": "ten_runtime_python",
+      "version": "0.11.55",
+      "hash": "5f4edb09f08b00e9118737186362dad07d827b61728aa35ed5948ede09191f6b",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime"
+        },
+        {
+          "type": "addon_loader",
+          "name": "python_addon_loader"
+        }
+      ],
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    },
+    {
+      "type": "system",
+      "name": "ten_runtime",
+      "version": "0.11.55",
+      "hash": "4ad4d28545f0c9a94ac567d2c87897883d23394198b3648fff4b84948e86c948",
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    },
+    {
+      "type": "system",
+      "name": "agora_rtc_sdk",
+      "version": "4.4.32-141",
+      "hash": "ce8f50da194f74610735c74450c5c04bbee7f56959431d628349082b90742eb8",
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    },
+    {
+      "type": "addon_loader",
+      "name": "python_addon_loader",
+      "version": "0.11.55",
+      "hash": "cd5b865cd9aff804634854c525ce141957a6361af8be830135e279028fc4fb0c",
+      "dependencies": [
+        {
+          "type": "system",
+          "name": "ten_runtime"
+        },
+        {
+          "type": "system",
+          "name": "ten_runtime_python"
+        }
+      ],
+      "supports": [
+        {
+          "os": "linux",
+          "arch": "x64"
+        }
+      ]
+    }
+  ]
+}

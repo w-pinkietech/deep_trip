@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Trip - Voice Test Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      max-width: 480px;
+      width: 100%;
+      padding: 2rem;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 0.5rem;
+      font-size: 1.8rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    .status {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      font-weight: 500;
+    }
+    .status.disconnected { background: #2d2d3d; color: #888; }
+    .status.connecting { background: #2d2d1d; color: #f0c040; }
+    .status.connected { background: #1d2d1d; color: #4caf50; }
+    .status.error { background: #2d1d1d; color: #f44336; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 1rem;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-join {
+      background: #4caf50;
+      color: white;
+    }
+    .btn-join:hover:not(:disabled) { background: #45a049; }
+    .btn-leave {
+      background: #f44336;
+      color: white;
+    }
+    .btn-leave:hover:not(:disabled) { background: #d32f2f; }
+    .btn-mute {
+      background: #ff9800;
+      color: white;
+    }
+    .btn-mute:hover:not(:disabled) { background: #f57c00; }
+    .btn-mute.muted {
+      background: #666;
+    }
+
+    .controls { display: none; }
+    .controls.active { display: block; }
+
+    .volume-meter {
+      margin: 1rem 0;
+      text-align: center;
+    }
+    .volume-bar {
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .volume-fill {
+      height: 100%;
+      background: #4caf50;
+      border-radius: 4px;
+      transition: width 0.1s;
+      width: 0%;
+    }
+    .volume-label {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .log {
+      margin-top: 1.5rem;
+      background: #111;
+      border-radius: 8px;
+      padding: 1rem;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+    .log-entry { color: #888; }
+    .log-entry.info { color: #4fc3f7; }
+    .log-entry.success { color: #4caf50; }
+    .log-entry.error { color: #f44336; }
+    .log-entry.warn { color: #ff9800; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Deep Trip</h1>
+    <p class="subtitle">Voice Guide Test Client</p>
+
+    <div id="status" class="status disconnected">Disconnected</div>
+
+    <div id="join-section">
+      <button id="btn-join" class="btn btn-join" onclick="joinChannel()">
+        Join Channel
+      </button>
+    </div>
+
+    <div id="controls" class="controls">
+      <button id="btn-mute" class="btn btn-mute" onclick="toggleMute()">
+        Mute Microphone
+      </button>
+      <div class="volume-meter">
+        <span class="volume-label">Your Microphone</span>
+        <div class="volume-bar"><div id="local-vol" class="volume-fill"></div></div>
+      </div>
+      <div class="volume-meter">
+        <span class="volume-label">Agent Audio</span>
+        <div class="volume-bar"><div id="remote-vol" class="volume-fill"></div></div>
+      </div>
+      <button id="btn-leave" class="btn btn-leave" onclick="leaveChannel()">
+        Leave Channel
+      </button>
+    </div>
+
+    <div id="log" class="log"></div>
+  </div>
+
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.22.0.js"></script>
+  <script>
+    const APP_ID = '371a0ec85abf406698db695f32423e9c';
+    const CHANNEL = 'deep_trip_demo';
+    const UID = 123;
+    const TOKEN_URL = '/token';  // relative URL, works with HTTPS
+
+    let client = null;
+    let localAudioTrack = null;
+    let isMuted = false;
+    let volumeInterval = null;
+
+    function log(msg, level = '') {
+      const el = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + level;
+      const ts = new Date().toLocaleTimeString();
+      entry.textContent = `[${ts}] ${msg}`;
+      el.appendChild(entry);
+      el.scrollTop = el.scrollHeight;
+      console.log(`[${level || 'log'}] ${msg}`);
+    }
+
+    function setStatus(text, cls) {
+      const el = document.getElementById('status');
+      el.textContent = text;
+      el.className = 'status ' + cls;
+    }
+
+    async function fetchToken() {
+      try {
+        const res = await fetch(`${TOKEN_URL}?channel=${CHANNEL}&uid=${UID}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data.token;
+      } catch (e) {
+        log('Token server not available, trying without token', 'warn');
+        return null;
+      }
+    }
+
+    async function joinChannel() {
+      try {
+        document.getElementById('btn-join').disabled = true;
+        setStatus('Connecting...', 'connecting');
+        log('Creating Agora client...', 'info');
+
+        client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+        client.on('user-published', async (user, mediaType) => {
+          log(`Agent published ${mediaType} (uid: ${user.uid})`, 'info');
+          await client.subscribe(user, mediaType);
+          log(`Subscribed to agent ${mediaType}`, 'success');
+          if (mediaType === 'audio') {
+            user.audioTrack.play();
+            log('Playing agent audio', 'success');
+          }
+        });
+
+        client.on('user-unpublished', (user, mediaType) => {
+          log(`Agent unpublished ${mediaType}`, 'warn');
+        });
+
+        client.on('user-joined', (user) => {
+          log(`User ${user.uid} joined channel`, 'info');
+        });
+
+        client.on('user-left', (user) => {
+          log(`User ${user.uid} left channel`, 'warn');
+        });
+
+        client.on('connection-state-change', (cur, prev) => {
+          log(`Connection: ${prev} -> ${cur}`, 'info');
+        });
+
+        const token = await fetchToken();
+        log(`Joining channel "${CHANNEL}" as UID ${UID}...`, 'info');
+        await client.join(APP_ID, CHANNEL, token, UID);
+        log('Joined channel successfully', 'success');
+
+        log('Creating microphone track...', 'info');
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        await client.publish([localAudioTrack]);
+        log('Microphone published', 'success');
+
+        setStatus('Connected - Speak to the guide!', 'connected');
+        document.getElementById('join-section').style.display = 'none';
+        document.getElementById('controls').classList.add('active');
+
+        // Volume monitoring
+        volumeInterval = setInterval(() => {
+          if (localAudioTrack) {
+            const localVol = localAudioTrack.getVolumeLevel() * 100;
+            document.getElementById('local-vol').style.width = localVol + '%';
+          }
+          const remoteUsers = client.remoteUsers;
+          let maxRemoteVol = 0;
+          remoteUsers.forEach(user => {
+            if (user.audioTrack) {
+              const vol = user.audioTrack.getVolumeLevel() * 100;
+              if (vol > maxRemoteVol) maxRemoteVol = vol;
+            }
+          });
+          document.getElementById('remote-vol').style.width = maxRemoteVol + '%';
+        }, 100);
+
+      } catch (err) {
+        log(`Error: ${err.message}`, 'error');
+        setStatus('Connection failed', 'error');
+        document.getElementById('btn-join').disabled = false;
+      }
+    }
+
+    function toggleMute() {
+      if (!localAudioTrack) return;
+      isMuted = !isMuted;
+      localAudioTrack.setEnabled(!isMuted);
+      const btn = document.getElementById('btn-mute');
+      btn.textContent = isMuted ? 'Unmute Microphone' : 'Mute Microphone';
+      btn.classList.toggle('muted', isMuted);
+      log(isMuted ? 'Microphone muted' : 'Microphone unmuted', 'info');
+    }
+
+    async function leaveChannel() {
+      try {
+        if (volumeInterval) clearInterval(volumeInterval);
+        if (localAudioTrack) {
+          localAudioTrack.close();
+          localAudioTrack = null;
+        }
+        if (client) {
+          await client.leave();
+          client = null;
+        }
+        log('Left channel', 'info');
+        setStatus('Disconnected', 'disconnected');
+        document.getElementById('join-section').style.display = 'block';
+        document.getElementById('btn-join').disabled = false;
+        document.getElementById('controls').classList.remove('active');
+        isMuted = false;
+      } catch (err) {
+        log(`Error leaving: ${err.message}`, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

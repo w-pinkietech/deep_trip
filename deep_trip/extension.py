@@ -1,4 +1,8 @@
 import json
+import re
+import uuid
+import asyncio
+from openai import AsyncOpenAI
 from ten_runtime import (
     AsyncExtension,
     AsyncTenEnv,
@@ -11,11 +15,17 @@ from ten_runtime import (
 )
 from .openclaw_client import OpenClawClient, OpenClawConfig
 
+
 class DeepTripExtension(AsyncExtension):
     def __init__(self, name: str) -> None:
         super().__init__(name)
         self.client: OpenClawClient | None = None
+        self.llm_client: AsyncOpenAI | None = None
+        self.llm_model: str = ""
+        self.system_prompt: str = ""
         self.location: tuple[float, float] | None = None
+        self.conversation_history: list[dict] = []
+        self.max_history: int = 20
 
     async def on_init(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_init")
@@ -23,23 +33,55 @@ class DeepTripExtension(AsyncExtension):
     async def on_start(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_start")
 
-        # Read container name from properties (falls back to default)
+        # OpenClaw client
         container_name = ""
         try:
-            container_name = await ten_env.get_property_string("OPENCLAW_HOST")
+            container_name, _ = await ten_env.get_property_string("OPENCLAW_HOST")
         except Exception:
             pass
-
         config = OpenClawConfig()
         if container_name:
             config.container_name = container_name
-
         self.client = OpenClawClient(config)
         ten_env.log_info(f"OpenClaw client ready (container: {config.container_name})")
+
+        # System prompt
+        try:
+            self.system_prompt, _ = await ten_env.get_property_string("SYSTEM_PROMPT")
+        except Exception:
+            self.system_prompt = ""
+
+        # LLM client (OpenAI-compatible)
+        api_key = ""
+        base_url = ""
+        model = ""
+        try:
+            api_key, _ = await ten_env.get_property_string("api_key")
+        except Exception:
+            pass
+        try:
+            base_url, _ = await ten_env.get_property_string("base_url")
+        except Exception:
+            pass
+        try:
+            model, _ = await ten_env.get_property_string("model")
+        except Exception:
+            pass
+
+        if api_key:
+            kwargs = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self.llm_client = AsyncOpenAI(**kwargs)
+            self.llm_model = model or "gpt-4o-mini"
+            ten_env.log_info(f"LLM client ready (model: {self.llm_model}, base_url: {base_url or 'default'})")
+        else:
+            ten_env.log_warn("No api_key configured, LLM calls will be skipped")
 
     async def on_stop(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_stop")
         self.client = None
+        self.llm_client = None
 
     async def on_deinit(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_deinit")
@@ -49,13 +91,15 @@ class DeepTripExtension(AsyncExtension):
         ten_env.log_debug(f"on_cmd name {cmd_name}")
 
         if cmd_name == "on_user_joined":
-            ten_env.log_info("User joined")
+            ten_env.log_info("User joined — sending greeting")
+            asyncio.create_task(self._send_greeting(ten_env))
         elif cmd_name == "on_user_left":
             ten_env.log_info("User left")
+            self.conversation_history.clear()
         elif cmd_name == "update_location":
             try:
-                lat = cmd.get_property_float("lat")
-                lng = cmd.get_property_float("lng")
+                lat, _ = cmd.get_property_float("lat")
+                lng, _ = cmd.get_property_float("lng")
                 self.location = (lat, lng)
                 ten_env.log_info(f"Location updated: {lat}, {lng}")
             except Exception as e:
@@ -64,69 +108,123 @@ class DeepTripExtension(AsyncExtension):
         cmd_result = CmdResult.create(StatusCode.OK, cmd)
         await ten_env.return_result(cmd_result)
 
+    async def _send_greeting(self, ten_env: AsyncTenEnv) -> None:
+        """Send a greeting when a user joins."""
+        if not self.llm_client:
+            # Fallback: send a static greeting directly to TTS
+            await self._send_text_to_tts(ten_env, "こんにちは！Deep Tripへようこそ。何かお手伝いできることはありますか？")
+            return
+
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": "ユーザーが接続しました。短く温かい挨拶をしてください。"})
+
+        try:
+            response = await self.llm_client.chat.completions.create(
+                model=self.llm_model,
+                messages=messages,
+                max_tokens=200,
+            )
+            greeting = self._strip_thinking(response.choices[0].message.content or "")
+            if greeting:
+                ten_env.log_info(f"Greeting: {greeting[:80]}...")
+                await self._send_text_to_tts(ten_env, greeting)
+        except Exception as e:
+            ten_env.log_warn(f"Greeting LLM call failed: {e}")
+            await self._send_text_to_tts(ten_env, "こんにちは！Deep Tripへようこそ。")
+
     async def on_data(self, ten_env: AsyncTenEnv, data: Data) -> None:
         data_name = data.get_name()
         ten_env.log_debug(f"on_data name {data_name}")
 
         if data_name == "asr_result":
             try:
-                # Properties on Data object are accessed synchronously
-                is_final = data.get_property_bool("is_final")
-                text = data.get_property_string("text")
-                
+                # TEN runtime get_property_* returns (value, error) tuples
+                is_final, _ = data.get_property_bool("final")
+                text, _ = data.get_property_string("text")
+
                 if is_final and text:
                     ten_env.log_info(f"ASR Result: {text}")
-                    location_str = f"{self.location[0]},{self.location[1]}" if self.location else "unknown location"
-                    
-                    context_info = ""
-                    if self.client:
-                        try:
-                            results = await self.client.search(text, location_str)
-                            if results and results[0].content:
-                                context_info = "\n".join([r.content for r in results])
-                                ten_env.log_info(f"Found {len(results)} search results")
-                        except Exception as e:
-                            ten_env.log_warn(f"Search failed: {e}")
-
-                    # Assemble enriched prompt
-                    prompt_parts = []
-                    
-                    # System prompt
-                    try:
-                        system_prompt = await ten_env.get_property_string("SYSTEM_PROMPT")
-                    except Exception:
-                        system_prompt = ""
-                    if system_prompt:
-                        prompt_parts.append(f"System Instructions:\n{system_prompt}")
-                    
-                    # Location context
-                    if self.location:
-                        prompt_parts.append(f"Current User Location: {location_str}")
-                    
-                    # Search context
-                    if context_info:
-                        prompt_parts.append(f"Context from Search:\n{context_info}")
-                    
-                    # User query
-                    prompt_parts.append(f"User Query: {text}")
-                    
-                    enriched_text = "\n\n".join(prompt_parts)
-
-                    output_data = Data.create("text_data")
-                    output_data.set_property_string("text", enriched_text)
-                    output_data.set_property_bool("is_final", True)
-                    await ten_env.send_data(output_data)
+                    asyncio.create_task(self._handle_user_query(ten_env, text))
             except Exception as e:
                 ten_env.log_warn(f"Failed to parse asr_result: {e}")
 
-    async def on_audio_frame(self, ten_env: AsyncTenEnv, audio_frame: AudioFrame) -> None:
-        audio_frame_name = audio_frame.get_name()
-        ten_env.log_debug(f"on_audio_frame name {audio_frame_name}")
+    async def _handle_user_query(self, ten_env: AsyncTenEnv, text: str) -> None:
+        """Process user query: search context, call LLM, send response to TTS."""
+        location_str = f"{self.location[0]},{self.location[1]}" if self.location else "unknown location"
 
-        # TODO: process audio frame
+        # Search for context via OpenClaw
+        context_info = ""
+        if self.client:
+            try:
+                results = await self.client.search(text, location_str)
+                if results and results[0].content:
+                    context_info = "\n".join([r.content for r in results if r.content])
+                    ten_env.log_info(f"Found {len(results)} search results")
+            except Exception as e:
+                ten_env.log_warn(f"Search failed: {e}")
+
+        # Build messages for the LLM
+        messages = []
+        if self.system_prompt:
+            system_parts = [self.system_prompt]
+            if self.location:
+                system_parts.append(f"ユーザーの現在地: {location_str}")
+            if context_info:
+                system_parts.append(f"検索結果からの参考情報:\n{context_info}")
+            messages.append({"role": "system", "content": "\n\n".join(system_parts)})
+
+        # Add conversation history
+        messages.extend(self.conversation_history)
+        messages.append({"role": "user", "content": text})
+
+        if not self.llm_client:
+            ten_env.log_warn("No LLM client, echoing user text")
+            await self._send_text_to_tts(ten_env, text)
+            return
+
+        try:
+            ten_env.log_info(f"Calling LLM with {len(messages)} messages...")
+            response = await self.llm_client.chat.completions.create(
+                model=self.llm_model,
+                messages=messages,
+                max_tokens=500,
+            )
+            reply = self._strip_thinking(response.choices[0].message.content or "")
+            ten_env.log_info(f"LLM reply: {reply[:100]}...")
+
+            # Update conversation history
+            self.conversation_history.append({"role": "user", "content": text})
+            self.conversation_history.append({"role": "assistant", "content": reply})
+            if len(self.conversation_history) > self.max_history:
+                self.conversation_history = self.conversation_history[-self.max_history:]
+
+            if reply:
+                await self._send_text_to_tts(ten_env, reply)
+        except Exception as e:
+            ten_env.log_warn(f"LLM call failed: {e}")
+
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """Remove <think>...</think> reasoning blocks from LLM output."""
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+    async def _send_text_to_tts(self, ten_env: AsyncTenEnv, text: str) -> None:
+        """Send text data to the TTS extension as TTSTextInput."""
+        request_id = str(uuid.uuid4())
+        output_data = Data.create("tts_text_input")
+        payload = json.dumps({
+            "request_id": request_id,
+            "text": text,
+            "text_input_end": True,
+        })
+        output_data.set_property_from_json("", payload)
+        await ten_env.send_data(output_data)
+        ten_env.log_info(f"Sent to TTS (req={request_id[:8]}): {text[:60]}...")
+
+    async def on_audio_frame(self, ten_env: AsyncTenEnv, audio_frame: AudioFrame) -> None:
+        pass
 
     async def on_video_frame(self, ten_env: AsyncTenEnv, video_frame: VideoFrame) -> None:
-        video_frame_name = video_frame.get_name()
-        ten_env.log_debug(f"on_video_frame name {video_frame_name}")
-
-        # TODO: process video frame
+        pass

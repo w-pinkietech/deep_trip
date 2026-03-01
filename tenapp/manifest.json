@@ -4,19 +4,25 @@
   "version": "0.1.0",
   "dependencies": [
     {
-      "path": "../ten-framework/ai_agents/agents/ten_packages/system/ten_runtime_go"
+      "type": "system",
+      "name": "ten_runtime_go",
+      "version": "0.11"
     },
     {
-      "path": "../ten-framework/ai_agents/agents/ten_packages/system/ten_ai_base"
+      "type": "system",
+      "name": "ten_ai_base",
+      "version": "0.7"
     },
     {
-      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/agora_rtc"
+      "type": "extension",
+      "name": "agora_rtc",
+      "version": "=0.23.9-t1"
     },
     {
       "path": "../ten-framework/ai_agents/agents/ten_packages/extension/streamid_adapter"
     },
     {
-      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/openai_asr_python"
+      "path": "../ten-framework/ai_agents/agents/ten_packages/extension/deepgram_asr_python"
     },
     {
       "path": "../ten-framework/ai_agents/agents/ten_packages/extension/openai_llm2_python"
@@ -25,7 +31,7 @@
       "path": "../ten-framework/ai_agents/agents/ten_packages/extension/minimax_tts_websocket_python"
     },
     {
-      "path": "../deep_trip/deep_trip"
+      "path": "../deep_trip"
     }
   ]
 }
