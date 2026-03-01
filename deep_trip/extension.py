@@ -15,6 +15,7 @@ class DeepTripExtension(AsyncExtension):
     def __init__(self, name: str) -> None:
         super().__init__(name)
         self.client: OpenClawClient | None = None
+        self.location: tuple[float, float] | None = None
 
     async def on_init(self, ten_env: AsyncTenEnv) -> None:
         ten_env.log_debug("on_init")
@@ -57,6 +58,14 @@ class DeepTripExtension(AsyncExtension):
             ten_env.log_info("User joined")
         elif cmd_name == "on_user_left":
             ten_env.log_info("User left")
+        elif cmd_name == "update_location":
+            try:
+                lat = cmd.get_property_float("lat")
+                lng = cmd.get_property_float("lng")
+                self.location = (lat, lng)
+                ten_env.log_info(f"Location updated: {lat}, {lng}")
+            except Exception as e:
+                ten_env.log_warn(f"Failed to update location: {e}")
 
         cmd_result = CmdResult.create(StatusCode.OK, cmd)
         await ten_env.return_result(cmd_result)
@@ -73,7 +82,8 @@ class DeepTripExtension(AsyncExtension):
                 
                 if is_final and text:
                     ten_env.log_info(f"ASR Result: {text}")
-                    # TODO: Trigger search or processing
+                    location_str = f"{self.location[0]},{self.location[1]}" if self.location else "unknown location"
+                    # TODO: Trigger search or processing with location_str
             except Exception as e:
                 ten_env.log_warn(f"Failed to parse asr_result: {e}")
 
